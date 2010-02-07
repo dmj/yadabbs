@@ -1,0 +1,30 @@
+#### $Id: yadabbsrc,v 1.1 2010/02/07 09:30:15 david Exp $
+####
+#### yadabs sample configuration file
+####
+
+## Prefix for full and differential backups
+PREFIX_FULL="full"
+PREFIX_DIFF="diff"
+
+## Name for backup files
+## (must not contain one ore more dots)
+NAME=`date +%s`
+
+## Mountpoint of the backup device
+BACKUP_DEV="/media/sda3"
+
+## Directory where backup files should be stored
+## (relative to BACKUP_DEV)
+BACKUP_DIR="backups"
+
+## Maximum number of differential backups before next full backup
+MAX_DIFFS=180
+
+## Remove old full and differential backups after a successful full
+## backup
+CLEANUP=true
+
+#### Local Variables:
+#### mode: sh
+#### End:

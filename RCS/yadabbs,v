@@ -1,0 +1,215 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2010.02.07.09.29.52;	author david;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@#!/bin/zsh
+#### $Id:$
+####
+#### yadabbs -- Yet another dar based backup script
+####
+#### == Synopsis
+####
+#### Yadabbs is a simple zsh based shell script that helps you create
+#### and maintain backups of your precious data.
+####
+#### == Usage
+####
+#### yadabbs [-c] [-v] </path/to/data/dir>
+####
+#### To start a backup of /path/to/data/dir. The program looks for a
+#### configuration file with backup related settings called .yadabsrc
+#### in this path (see sample configuration file). Depending on the
+#### configuration yadabbs decides whether to do a full or a
+#### differential backup and calls the backup program dar with the
+#### appropriate paremeters.
+####
+#### After a successful backup the backup archive is registered in a
+#### dar_manager database.
+####
+#### Possible commandline switches are:
+####
+####    -c    Unregister non-existent backup archives in database after backup
+####    -v    Verbose output"
+####
+#### == Copyright
+####
+#### Copyright (C) 2010 by David Maus <maus.david@@gmail.com>
+####
+#### This program is free software: you can redistribute it and/or modify
+#### it under the terms of the GNU General Public License as published by
+#### the Free Software Foundation, either version 3 of the License, or
+#### (at your option) any later version.
+####
+#### This program is distributed in the hope that it will be useful,
+#### but WITHOUT ANY WARRANTY; without even the implied warranty of
+#### MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#### GNU General Public License for more details.
+####
+#### You should have received a copy of the GNU General Public License
+#### along with this program.  If not, see <http://www.gnu.org/licenses/>.
+####
+#### == ChangeLog
+####
+#### $Log:$
+
+#### Syntax
+SYNTAX="yadabbs [-c] [-v] </path/to/data/dir>
+
+    -c    Unregister non-existent backup archives in database after backup
+    -v    Verbose output"
+
+#### Functions
+yadabbs_error ()
+{
+    ## Print error message $2 and terminate program with exit code $1
+    echo "$2"
+    exit $1
+}
+
+yadabbs_log ()
+{
+    ## Print timestamp and message $1 if global variable verbose is
+    ## set
+    [[ -n $verbose ]] && echo `date +%c` "$1"
+}
+
+yadabbs_register ()
+{
+    ## Register backup $1 in dar_mananger database $1
+    ##
+    ## Create database if it does not exist
+    [[ -e "$2" ]] || dar_manager --create "$2" || yadabbs_error 1 "Cannot create database: $2"
+    cd "${2:h}"
+    dar_manager --base "$2" --add "${1:h:t}/${1:t}" || yadabbs_error 1 "Cannot register backup to database: $1, $2"
+    cd -
+}
+
+yadabbs_count ()
+{
+    ## Return number of files in directory $1 whose name starts with
+    ## $2
+    unsetopt nomatch
+    local num=`ls -1 "$1/$2"* 2>/dev/null | wc -l`
+    echo $num
+}
+
+yadabbs_latest ()
+{
+    ## Return name of youngest file in directory $1 whose name starts
+    ## with $2
+    unsetopt nomatch
+    local rtn=`ls -1 --sort time "$1/$2"* 2>/dev/null | head -n 1`
+    echo $rtn
+}
+
+yadabbs_cleanup ()
+{
+    ## Remove non-existent archives from database $1
+    [[ -e "$1" ]] || yadabbs_error 1 "Cannot access database: $1"
+
+    cd "${1:h}"
+
+    ## Step 1: Gather list of registered archive files
+    local lst
+    lst=`dar_manager --base "$1" --list | grep "^[[:space:]]\+[[:digit:]]\+"`
+
+    ## Step 2: Create list of non-existent archives
+    local rem
+    local arc
+    typeset -a rem
+    for arc in "${(f)lst}"
+    do
+	[[ -e "$arc[(w)2]/$arc[(w)3].1.dar" ]] || rem+="$arc[(w)2][[:space:]]\+$arc[(w)3]"
+    done
+
+    ## Step 3: Unregister all non-existent archives
+    for arc in $rem
+    do
+	local num=`dar_manager --base "$1" --list | grep "$arc" | awk '{print $1}'`
+	yadabbs_log "Unregister non-existent file: $num"
+	dar_manager --base "$1" --delete $num || yadabbs_error 1 "Cannot remove non-existent file: $num"
+    done
+
+    cd -
+}
+
+#### Main loop
+
+## Check commandline options
+zparseopts v=verbose c=cleanup
+[[ -n $verbose ]] && shift
+[[ -n $cleanup ]] && shift
+
+[[ -n $2 || -z $1 ]] && yadabbs_error 1 "$SYNTAX"
+
+## Load configuration file
+DATA_DIR="$1"
+[[ -d "$DATA_DIR" ]] || yadabbs_error 1 "Cannot access data directory: $DATA_DIR"
+[[ -e "$DATA_DIR/.yadabbsrc" ]] || yadabbs_error 1 "Cannot access configuration file for data directory: $DATA_DIR, $DATA_DIR/.yadabbsrc"
+source "$DATA_DIR/.yadabbsrc"
+
+## Check if backup device is mounted
+grep "$BACKUP_DEV" < /proc/mounts 1>/dev/null || yadabbs_error 1 "Backup device not mounted: $BACKUP_DEV"
+
+THIS="$NAME"
+OPTS=""
+THIS_PATH="$BACKUP_DEV/$BACKUP_DIR/${DATA_DIR//\//_}"
+
+## Maybe create backup directory
+mkdir -p "$THIS_PATH" 2>/dev/null || yadabbs_error 1 "Cannot create backup directory: $THIS_PATH"
+
+## Decide whether to make a full or a differential backup
+if [[ $(yadabbs_count "$THIS_PATH" "$PREFIX_FULL") -eq 0 || $(yadabbs_count "$THIS_PATH" "$PREFIX_DIFF") -ge $MAX_DIFFS ]]; then
+
+    ## Full backup
+    THIS="$PREFIX_FULL-$THIS"
+    yadabbs_log "Starting full backup: $DATA_DIR"
+    yadabbs_log "Target: $THIS_PATH/$THIS"
+
+else
+
+    ## Differential backup
+    THIS="$PREFIX_DIFF-$THIS"
+    yadabbs_log "Starting differential backup: $DATA_DIR"
+    yadabbs_log "Target: $THIS_PATH/$THIS"
+
+    ## Determine reference backup
+    OPTS=$(yadabbs_latest "$THIS_PATH" "$PREFIX_DIFF")
+    [[ -z $OPTS ]] && OPTS=$(yadabbs_latest "$THIS_PATH" "$PREFIX_FULL")
+    [[ -z $OPTS ]] && yadabbs_error 1 "Cannot determine reference backup"
+    yadabbs_log "Reference: $OPTS"
+
+    ## Adjust reference backup file to command line parameter
+    OPTS="--ref=${OPTS:r:r}"
+fi
+
+dar --create "$THIS_PATH/$THIS" --fs-root="$DATA_DIR" $OPTS 
+
+## Register backup in database
+yadabbs_register "$THIS_PATH/$THIS" "$THIS_PATH.db"
+
+## Maybe cleanup database
+[[ "$CLEANUP" == "true" || -n $cleanup ]] && yadabbs_cleanup "$THIS_PATH.db"
+
+#### Local Variables:
+#### mode: sh
+#### mode: whitespace
+#### End:@

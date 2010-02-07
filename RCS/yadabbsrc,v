@@ -1,9 +1,14 @@
-head	1.1;
+head	1.2;
 access;
 symbols;
 locks; strict;
 comment	@# @;
 
+
+1.2
+date	2010.02.07.11.35.06;	author david;	state Exp;
+branches;
+next	1.1;
 
 1.1
 date	2010.02.07.09.30.15;	author david;	state Exp;
@@ -15,12 +20,12 @@ desc
 @@
 
 
-1.1
+1.2
 log
-@Initial revision
+@* adjust description of CLEANUP option
 @
 text
-@#### $Id:$
+@#### $Id: yadabbsrc,v 1.1 2010/02/07 09:30:15 david Exp david $
 ####
 #### yadabs sample configuration file
 ####
@@ -43,11 +48,25 @@ BACKUP_DIR="backups"
 ## Maximum number of differential backups before next full backup
 MAX_DIFFS=180
 
-## Remove old full and differential backups after a successful full
-## backup
+## Remove non existent files from database after successful backup
 CLEANUP=true
 
 #### Local Variables:
 #### mode: sh
 #### End:
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d1 1
+a1 1
+#### $Id:$
+d24 1
+a24 2
+## Remove old full and differential backups after a successful full
+## backup
 @

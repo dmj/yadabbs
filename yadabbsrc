@@ -1,4 +1,4 @@
-#### $Id: yadabbsrc,v 1.1 2010/02/07 09:30:15 david Exp $
+#### $Id: yadabbsrc,v 1.2 2010/02/07 11:35:06 david Exp $
 ####
 #### yadabs sample configuration file
 ####
@@ -21,8 +21,7 @@ BACKUP_DIR="backups"
 ## Maximum number of differential backups before next full backup
 MAX_DIFFS=180
 
-## Remove old full and differential backups after a successful full
-## backup
+## Remove non existent files from database after successful backup
 CLEANUP=true
 
 #### Local Variables:
